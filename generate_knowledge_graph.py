@@ -17,18 +17,47 @@ logger = logging.getLogger(__name__)
 load_dotenv()
 
 # Get API key from environment variable
+# Note: API key validation is deferred to when LLM is actually created
+# This allows Streamlit Cloud to inject secrets after module import
 api_key = os.getenv("OPENAI_API_KEY")
 
-if not api_key:
-    raise ValueError(
-        "OPENAI_API_KEY not found in environment variables. "
-        "Please create a .env file with OPENAI_API_KEY=your_key_here"
-    )
+# Try to get from streamlit secrets if available
+try:
+    import streamlit as st
+    if hasattr(st, 'secrets') and 'OPENAI_API_KEY' in st.secrets:
+        api_key = st.secrets['OPENAI_API_KEY']
+        logger.info("Using API key from Streamlit secrets")
+except (ImportError, FileNotFoundError, KeyError):
+    pass  # Streamlit not available or secrets not configured
 
 
 def create_llm(model_name: str = "gpt-4o", temperature: float = 0):
-    """Create ChatOpenAI instance with specified parameters."""
-    return ChatOpenAI(temperature=temperature, model_name=model_name, api_key=api_key)
+    """
+    Create ChatOpenAI instance with specified parameters.
+    
+    Validates API key and raises helpful error if not found.
+    """
+    # Get API key - check multiple sources
+    current_api_key = api_key
+    
+    # Try streamlit secrets if api_key is None
+    if not current_api_key:
+        try:
+            import streamlit as st
+            if hasattr(st, 'secrets') and 'OPENAI_API_KEY' in st.secrets:
+                current_api_key = st.secrets['OPENAI_API_KEY']
+        except (ImportError, FileNotFoundError, KeyError, AttributeError):
+            pass
+    
+    # Validate API key
+    if not current_api_key:
+        raise ValueError(
+            "OPENAI_API_KEY not found. "
+            "For local development: Create a .env file with OPENAI_API_KEY=your_key_here. "
+            "For Streamlit Cloud: Add OPENAI_API_KEY to your app secrets in the dashboard."
+        )
+    
+    return ChatOpenAI(temperature=temperature, model_name=model_name, api_key=current_api_key)
 
 
 def create_graph_transformer(
