@@ -31,14 +31,15 @@ except (ImportError, FileNotFoundError, KeyError):
     pass  # Streamlit not available or secrets not configured
 
 
-def create_llm(model_name: str = "gpt-4o", temperature: float = 0):
+def create_llm(model_name: str = "gpt-4o", temperature: float = 0, api_key_override: Optional[str] = None):
     """
     Create ChatOpenAI instance with specified parameters.
     
     Validates API key and raises helpful error if not found.
     """
     # Get API key - check multiple sources
-    current_api_key = api_key
+    # Priority: explicit override > environment / .env loaded value > streamlit secrets
+    current_api_key = api_key_override if api_key_override else api_key
     
     # Try streamlit secrets if api_key is None
     if not current_api_key:
@@ -54,9 +55,9 @@ def create_llm(model_name: str = "gpt-4o", temperature: float = 0):
         raise ValueError(
             "OPENAI_API_KEY not found. "
             "For local development: Create a .env file with OPENAI_API_KEY=your_key_here. "
-            "For Streamlit Cloud: Add OPENAI_API_KEY to your app secrets in the dashboard."
+            "For Streamlit Cloud: Add OPENAI_API_KEY to your app secrets in the dashboard, or paste it into the API key field in the sidebar."
         )
-    
+
     return ChatOpenAI(temperature=temperature, model_name=model_name, api_key=current_api_key)
 
 
@@ -236,7 +237,8 @@ def generate_knowledge_graph(
     temperature: float = 0,
     allowed_nodes: Optional[List[str]] = None,
     allowed_relationships: Optional[List[Tuple[str, str, str]]] = None,
-    output_file: str = "knowledge_graph.html"
+    output_file: str = "knowledge_graph.html",
+    api_key: Optional[str] = None
 ):
     """
     Generates and visualizes a knowledge graph from input text.
@@ -256,31 +258,31 @@ def generate_knowledge_graph(
         tuple: (pyvis.network.Network, graph_documents) or (None, None) if error.
     """
     try:
-        # Create LLM and transformer
-        llm = create_llm(model_name=model_name, temperature=temperature)
+        # Create LLM and transformer (pass optional api_key from caller)
+        llm = create_llm(model_name=model_name, temperature=temperature, api_key_override=api_key)
         graph_transformer = create_graph_transformer(
             llm=llm,
             allowed_nodes=allowed_nodes,
             allowed_relationships=allowed_relationships
         )
-        
+
         # Extract graph data
         graph_documents = asyncio.run(extract_graph_data(text, graph_transformer))
-        
+
         if not graph_documents:
             logger.warning("No graph documents extracted")
             return None, None
-        
+
         # Visualize
         net = visualize_graph(graph_documents)
-        
+
         if net:
             # Save graph
             save_graph(net, output_file)
             return net, graph_documents
         else:
             return None, graph_documents
-            
+
     except Exception as e:
         logger.error(f"Error generating knowledge graph: {e}")
         raise

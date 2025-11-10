@@ -69,6 +69,29 @@ with st.sidebar.expander("🤖 Model Settings", expanded=False):
         help="Higher values make output more random, lower values more deterministic"
     )
 
+    # API key input (optional) - allows pasting key for the session
+    st.markdown("---")
+    api_from_env = None
+    try:
+        # Show hint if key is already in streamlit secrets
+        if hasattr(st, 'secrets') and 'OPENAI_API_KEY' in st.secrets:
+            api_from_env = st.secrets['OPENAI_API_KEY']
+    except Exception:
+        api_from_env = None
+
+    api_key_input = st.text_input(
+        "OpenAI API Key (optional)",
+        value="" if not api_from_env else api_from_env,
+        type="password",
+        help="Paste your OpenAI API key for this session. For Streamlit Cloud prefer using Secrets."
+    )
+
+    # Store API key in session state so it can be passed to backend functions
+    if api_key_input:
+        st.session_state['OPENAI_API_KEY'] = api_key_input
+    elif 'OPENAI_API_KEY' not in st.session_state and api_from_env:
+        st.session_state['OPENAI_API_KEY'] = api_from_env
+
 # Advanced graph constraints
 with st.sidebar.expander("🎯 Graph Constraints (Optional)", expanded=False):
     use_node_constraints = st.checkbox("Limit node types", value=False)
@@ -140,7 +163,8 @@ if input_method == "📤 Upload txt":
                             model_name=model_name,
                             temperature=temperature,
                             allowed_nodes=allowed_nodes,
-                            allowed_relationships=allowed_relationships
+                            allowed_relationships=allowed_relationships,
+                            api_key=st.session_state.get('OPENAI_API_KEY')
                         )
                         
                         if net and graph_docs:
@@ -231,7 +255,8 @@ elif input_method == "✍️ Input text":
                         model_name=model_name,
                         temperature=temperature,
                         allowed_nodes=allowed_nodes,
-                        allowed_relationships=allowed_relationships
+                        allowed_relationships=allowed_relationships,
+                        api_key=st.session_state.get('OPENAI_API_KEY')
                     )
                     
                     if net and graph_docs:
@@ -329,7 +354,8 @@ elif input_method == "📚 Multiple texts":
                         model_name=model_name,
                         temperature=temperature,
                         allowed_nodes=allowed_nodes,
-                        allowed_relationships=allowed_relationships
+                        allowed_relationships=allowed_relationships,
+                        api_key=st.session_state.get('OPENAI_API_KEY')
                     )
                     
                     if net and graph_docs:
